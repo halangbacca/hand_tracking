@@ -3,7 +3,7 @@ import mediapipe as mp
 import os
 import threading
 from time import sleep
-from pynput.keyboard import Controller
+from pynput.keyboard import Controller, Key
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -140,6 +140,7 @@ while True:
 
             if fingers == [False, False, False, False, True] and len(text) > 1:
                 text = text[:-1]
+                keyboard.press(Key.backspace)
                 sleep(0.15)
 
             # Desenha o texto na tela
