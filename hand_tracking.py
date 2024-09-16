@@ -1,10 +1,12 @@
 import cv2
 import mediapipe as mp
 import os
+import numpy as np
 import threading
 from time import sleep
 from pynput.keyboard import Controller, Key
 
+# Constantes de cores
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (0, 0, 255)
@@ -12,29 +14,39 @@ BLUE = (255, 0, 0)
 GREEN = (0, 255, 0)
 LIGHT_BLUE = (255, 255, 0)
 
+# Inicializa o módulo de mãos do MediaPipe
 mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
-
 hands = mp_hands.Hands()
 
+# Inicializa a câmera
 camera = cv2.VideoCapture(0)
 
+# Variáveis para controle de resolução
 resolution_x = 1280
 resolution_y = 720
 
+# Variáveis para controle de programas
 text_editor = False
 chrome = False
 calculator = False
 
+# Variáveis do teclado virtual
 keyboard_keys = [['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
             ['A','S','D','F','G','H','J','K','L'],
             ['Z','X','C','V','B','N','M', ',','.',' ']]
-
 offset = 50
 counter = 0
 text = '>'
 keyboard = Controller()
 
+# Variáveis do quadro branco
+whiteboard = np.ones((resolution_y, resolution_x, 3), np.uint8) * 255
+brush_color = (255, 0, 0)
+brush_thickness = 7
+x_board, y_board = 0, 0
+
+# Configura a resolução da câmera
 camera.set(cv2.CAP_PROP_FRAME_WIDTH, resolution_x)
 camera.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution_y)
 
@@ -138,6 +150,7 @@ while True:
                     # Permite escrever em outros aplicativos do computador
                     keyboard.press(write)
 
+            # Comando para apagar o texto
             if fingers == [False, False, False, False, True] and len(text) > 1:
                 text = text[:-1]
                 keyboard.press(Key.backspace)
@@ -172,17 +185,57 @@ while True:
             if fingers == [False, True, False, False, True]:
                 break
             print(fingers)
-    
+
+    if len(all_hands) == 2:
+        fingers_left_hand = fingers_raised(all_hands[0])
+        fingers_right_hand = fingers_raised(all_hands[1])
+
+        # Utiliza o dedo indicador como pincel
+        indicator_x, indicator_y, indicator_z = all_hands[0]['coordinates'][8]
+
+        if sum(fingers_right_hand) == 1:
+            brush_color = BLUE
+        elif sum(fingers_right_hand) == 2:
+            brush_color = GREEN
+        elif sum(fingers_right_hand) == 3:
+            brush_color = RED
+        elif sum(fingers_right_hand) == 4:
+            brush_color = BLACK
+        elif sum(fingers_right_hand) == 5:
+            brush_color = WHITE
+        else:
+            whiteboard = np.ones((resolution_y, resolution_x, 3), np.uint8) * 255
+
+        brush_thickness = int(abs(indicator_z)) // 3 + 5
+        cv2.circle(img, (indicator_x, indicator_y), brush_thickness, brush_color, cv2.FILLED)
+
+        if fingers_left_hand == [False, True, False, False, False]:
+            if x_board == 0 and y_board == 0:
+                x_board, y_board = indicator_x, indicator_y
+
+            cv2.line(whiteboard, (x_board, y_board), (indicator_x, indicator_y), brush_color, brush_thickness)
+            x_board, y_board = indicator_x, indicator_y
+        else:
+            x_board, y_board = 0, 0
+
+        img = cv2.addWeighted(img, 1, whiteboard, 0.2, 0)
+
+    # Desenha a imagem na tela
     cv2.imshow('Image', img)
 
-    key = cv2.waitKey(1)
+    # Desenha o quadro branco na tela
+    cv2.imshow('Whiteboard', whiteboard)
 
+    key = cv2.waitKey(1)
     if key == 27:
         break
 
 # Cria um arquivo de texto com o conteúdo escrito
 with open('text.txt', 'w') as archive:
     archive.write(text)
+
+# Salva a imagem do quadro branco
+cv2.imwrite('whiteboard.png', whiteboard)
 
 camera.release()
 cv2.destroyAllWindows()
